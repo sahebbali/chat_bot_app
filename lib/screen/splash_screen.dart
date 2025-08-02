@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:chat_bot_app/screen/chat_screen.dart';
+// import 'package:chat_bot_app/screen/chat_screen.dart';
 import 'package:chat_bot_app/screen/dashboard_screen.dart';
 import 'package:flutter/material.dart';
 
@@ -18,7 +18,9 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     Timer(const Duration(seconds: 3), () {
       Navigator.pushReplacement(
-          context, MaterialPageRoute(builder: (context) => DashboardScreen()));
+        context,
+        MaterialPageRoute(builder: (context) => DashboardScreen()),
+      );
     });
   }
 
@@ -30,15 +32,15 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Image.asset(
-              "assets/icon/robot.png",
-              height: 150,
-            ),
-            const  SizedBox(height: 5,),
+            Image.asset("assets/icon/robot.jpeg", height: 150),
+            const SizedBox(height: 5),
             Text(
               "Chat Bot",
-              style: mTextStyle25(fontWeight: FontWeight.bold , fontColor: Colors.orange),
-            )
+              style: mTextStyle25(
+                fontWeight: FontWeight.bold,
+                fontColor: Colors.orange,
+              ),
+            ),
           ],
         ),
       ),

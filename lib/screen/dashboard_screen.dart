@@ -4,6 +4,7 @@ import 'package:chat_bot_app/utils/util_helper.dart';
 import 'package:flutter/material.dart';
 
 class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }

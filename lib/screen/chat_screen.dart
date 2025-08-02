@@ -1,7 +1,7 @@
 import 'package:animated_text_kit/animated_text_kit.dart';
 import 'package:chat_bot_app/model/message_model.dart';
 import 'package:chat_bot_app/provider/msg_provider.dart';
-import 'package:chat_bot_app/utils/colors.dart';
+// import 'package:chat_bot_app/utils/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -10,8 +10,8 @@ import 'package:provider/provider.dart';
 import '../utils/util_helper.dart';
 
 class ChatScreen extends StatefulWidget {
-  String query;
-  ChatScreen({super.key, required this.query});
+  final String query;
+  const ChatScreen({super.key, required this.query});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
