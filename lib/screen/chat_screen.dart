@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:speech_to_text/speech_to_text.dart'
-    as stt; // 1. <-- IMPORT PACKAGE
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:connectivity_plus/connectivity_plus.dart'; // Import connectivity_plus
+import 'dart:async'; // For StreamSubscription
 
 import '../utils/util_helper.dart';
 
@@ -23,27 +24,54 @@ class _ChatScreenState extends State<ChatScreen> {
   List<MessageModel> listMsg = [];
   DateFormat dateFormat = DateFormat().add_jm();
 
-  // 2. <-- ADD SPEECH-TO-TEXT STATE VARIABLES
   late stt.SpeechToText _speech;
   bool _isListening = false;
+
+  // Network connectivity variables
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  bool _isOnline = true; // Assume online initially
 
   @override
   void initState() {
     super.initState();
-
-    // 3. <-- INITIALIZE SPEECH INSTANCE
     _speech = stt.SpeechToText();
 
-    /// Send initial query when the screen opens
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      Provider.of<MessageProvider>(
-        context,
-        listen: false,
-      ).sendMessage(message: widget.query);
-    });
+    // Initialize and listen for network changes
+    _checkInitialConnectivityAndSendQuery();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
   }
 
-  // 4. <-- ADD THE LISTEN FUNCTION
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel(); // Clean up the listener
+    super.dispose();
+  }
+
+  // Method to check initial connectivity and send the first message
+  Future<void> _checkInitialConnectivityAndSendQuery() async {
+    final connectivityResult = await (Connectivity().checkConnectivity());
+    _updateConnectionStatus(connectivityResult);
+
+    // Only send the initial query if online
+    if (_isOnline && mounted) {
+      Provider.of<MessageProvider>(context, listen: false)
+          .sendMessage(message: widget.query);
+    }
+  }
+
+  // Method to update connection status
+  void _updateConnectionStatus(List<ConnectivityResult> results) {
+    bool online = results.any((result) =>
+        result == ConnectivityResult.mobile ||
+        result == ConnectivityResult.wifi ||
+        result == ConnectivityResult.ethernet);
+    if (online != _isOnline) {
+      setState(() {
+        _isOnline = online;
+      });
+    }
+  }
+
   void _listen() async {
     if (!_isListening) {
       bool available = await _speech.initialize(
@@ -54,7 +82,6 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => _isListening = true);
         _speech.listen(
           onResult: (val) => setState(() {
-            // Update the controller with the recognized words
             chatBoxController.text = val.recognizedWords;
           }),
         );
@@ -73,7 +100,8 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset("assets/icon/robot.jpeg", height: 30),
+            // Ensure this asset exists in your project
+            Image.asset("assets/icon/robot.png", height: 30, errorBuilder: (context, error, stackTrace) => Icon(Icons.android, color: Colors.white,)),
             Text.rich(
               TextSpan(
                 text: "Chat",
@@ -116,76 +144,117 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          /// ---------------- Chat List ----------------------- ///
-          Expanded(
-            child: Consumer<MessageProvider>(
-              builder: (_, provider, child) {
-                listMsg = provider.listMessage;
-                return ListView.builder(
-                  reverse: true,
-                  itemCount: listMsg.length,
-                  itemBuilder: (context, index) {
-                    return listMsg[index].sendId == 0
-                        ? userChatBox(listMsg[index])
-                        : botChatBox(listMsg[index], index); //
-                  },
-                );
-              },
+      // Conditional Body based on network status
+      body: _isOnline ? _buildChatBody() : _buildOfflineBody(),
+    );
+  }
+  
+  // Widget for when the app is OFFLINE
+  Widget _buildOfflineBody() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.wifi_off_rounded,
+              color: Colors.white60,
+              size: 80,
             ),
-          ),
-
-          /// Chat box
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: chatBoxController,
+            SizedBox(height: 20),
+            Text(
+              "You Are Offline",
+              style: mTextStyle25(fontColor: Colors.white),
+            ),
+            SizedBox(height: 10),
+            Text(
+              "Please check your connection and try again.",
               style: mTextStyle18(fontColor: Colors.white70),
-              decoration: InputDecoration(
-                // 5. <-- UPDATE THE PREFIX ICON
-                prefixIcon: GestureDetector(
-                  onTap: _listen, // Call the listen function on tap
-                  child: Icon(
-                    // Change icon and color based on listening state
-                    _isListening ? Icons.mic : Icons.mic_none,
-                    color: _isListening ? Colors.red : Colors.white,
-                  ),
+              textAlign: TextAlign.center,
+            ),
+             SizedBox(height: 30),
+              ElevatedButton.icon(
+                onPressed: _checkInitialConnectivityAndSendQuery, // Reload on tap
+                icon: const Icon(Icons.refresh),
+                label: Text("Reload"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  textStyle: mTextStyle18(fontWeight: FontWeight.bold),
                 ),
-                suffixIcon: InkWell(
-                  onTap: () {
-                    if (chatBoxController.text.isNotEmpty) {
-                      Provider.of<MessageProvider>(
-                        context,
-                        listen: false,
-                      ).sendMessage(message: chatBoxController.text);
-                      chatBoxController.clear();
-                      // If it's listening, stop it
-                      if (_isListening) {
-                        _speech.stop();
-                        setState(() {
-                          _isListening = false;
-                          chatBoxController.text =
-                              ''; // Clear input after sending
-                        });
-                      }
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Widget for when the app is ONLINE
+  Widget _buildChatBody() {
+    return Column(
+      children: [
+        /// ---------------- Chat List ----------------------- ///
+        Expanded(
+          child: Consumer<MessageProvider>(
+            builder: (_, provider, child) {
+              listMsg = provider.listMessage;
+              return ListView.builder(
+                reverse: true,
+                itemCount: listMsg.length,
+                itemBuilder: (context, index) {
+                  return listMsg[index].sendId == 0
+                      ? userChatBox(listMsg[index])
+                      : botChatBox(listMsg[index], index); //
+                },
+              );
+            },
+          ),
+        ),
+
+        /// Chat box
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: TextField(
+            controller: chatBoxController,
+            style: mTextStyle18(fontColor: Colors.white70),
+            decoration: InputDecoration(
+              prefixIcon: GestureDetector(
+                onTap: _listen,
+                child: Icon(
+                  _isListening ? Icons.mic : Icons.mic_none,
+                  color: _isListening ? Colors.red : Colors.white,
+                ),
+              ),
+              suffixIcon: InkWell(
+                onTap: () {
+                  if (chatBoxController.text.isNotEmpty) {
+                    Provider.of<MessageProvider>(context, listen: false)
+                        .sendMessage(message: chatBoxController.text);
+                    chatBoxController.clear();
+                    if (_isListening) {
+                      _speech.stop();
+                      setState(() {
+                        _isListening = false;
+                      });
                     }
-                  },
-                  child: const Icon(Icons.send, color: Colors.orange),
-                ),
-                hintText: "Write or say a question!",
-                hintStyle: mTextStyle18(fontColor: Colors.white38),
-                filled: true,
-                fillColor: Colors.grey[900],
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(21),
-                  borderSide: BorderSide.none,
-                ),
+                  }
+                },
+                child: const Icon(Icons.send, color: Colors.orange),
+              ),
+              hintText: "Write or say a question!",
+              hintStyle: mTextStyle18(fontColor: Colors.white38),
+              filled: true,
+              fillColor: Colors.grey[900],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(21),
+                borderSide: BorderSide.none,
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -265,8 +334,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       isRepeatingAnimation: false,
                       onFinished: () {
                         context.read<MessageProvider>().updateMessageRead(
-                          index,
-                        );
+                              index,
+                            );
                       },
                       animatedTexts: [
                         TypewriterAnimatedText(
@@ -287,6 +356,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       "assets/icon/typing.png",
                       height: 30,
                       width: 30,
+                      errorBuilder: (context, error, stackTrace) => Icon(Icons.android, color: Colors.black45,),
                     ),
                     InkWell(
                       onTap: () {
@@ -324,37 +394,16 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-// Make sure you have these helper functions defined in your utils/util_helper.dart
-// Or define them here if you haven't already.
-
+// // These should be in your utils/util_helper.dart file
 // TextStyle mTextStyle11({Color? fontColor, FontWeight? fontWeight}) {
-//   return TextStyle(
-//     fontSize: 11,
-//     color: fontColor ?? Colors.black,
-//     fontWeight: fontWeight ?? FontWeight.normal,
-//   );
+//   return TextStyle(fontSize: 11, color: fontColor ?? Colors.black, fontWeight: fontWeight ?? FontWeight.normal);
 // }
-
 // TextStyle mTextStyle15({Color? fontColor, FontWeight? fontWeight}) {
-//   return TextStyle(
-//     fontSize: 15,
-//     color: fontColor ?? Colors.black,
-//     fontWeight: fontWeight ?? FontWeight.normal,
-//   );
+//   return TextStyle(fontSize: 15, color: fontColor ?? Colors.black, fontWeight: fontWeight ?? FontWeight.normal);
 // }
-
 // TextStyle mTextStyle18({Color? fontColor, FontWeight? fontWeight}) {
-//   return TextStyle(
-//     fontSize: 18,
-//     color: fontColor ?? Colors.black,
-//     fontWeight: fontWeight ?? FontWeight.normal,
-//   );
+//   return TextStyle(fontSize: 18, color: fontColor ?? Colors.black, fontWeight: fontWeight ?? FontWeight.normal);
 // }
-
 // TextStyle mTextStyle25({Color? fontColor, FontWeight? fontWeight}) {
-//   return TextStyle(
-//     fontSize: 25,
-//     color: fontColor ?? Colors.black,
-//     fontWeight: fontWeight ?? FontWeight.bold,
-//   );
+//   return TextStyle(fontSize: 25, color: fontColor ?? Colors.black, fontWeight: fontWeight ?? FontWeight.bold);
 // }
